@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
+import AuthFlow from './components/AuthFlow';
+import authService from './services/authService';
 import './App.css';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authTokens, setAuthTokens] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [selectedCycle, setSelectedCycle] = useState(null);
@@ -25,9 +30,59 @@ function App() {
   const [members, setMembers] = useState([]);
   const [labels, setLabels] = useState([]);
 
+  useEffect(() => {
+    const checkAuth = () => {
+      authService.loadTokensFromStorage();
+      const authenticated = authService.isAuthenticated();
+      setIsAuthenticated(authenticated);
+      if (authenticated) {
+        setAuthTokens(authService.getTokens());
+      }
+      setAuthLoading(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  const handleAuthSuccess = (tokens) => {
+    setAuthTokens(tokens);
+    setIsAuthenticated(true);
+    
+    console.log('Login realizado com sucesso:', {
+      csrfToken: tokens.csrfToken,
+      sessionId: tokens.sessionId
+    });
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    setIsAuthenticated(false);
+    setAuthTokens(null);
+    setSelectedTeam(null);
+    setSelectedCycle(null);
+    setCycles([]);
+    setTasks([]);
+    setFilteredTasks([]);
+  };
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="auth-loading">
+          <div className="spinner"></div>
+          <p>Verificando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AuthFlow onAuthSuccess={handleAuthSuccess} />;
+  }
 
   // Função para buscar dados auxiliares
   const fetchAuxiliaryData = async () => {
@@ -711,7 +766,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header onMenuClick={toggleSidebar} />
+      <Header onMenuClick={toggleSidebar} onLogout={handleLogout} />
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}

@@ -1,15 +1,27 @@
 import React from 'react';
 import './Header.css';
 
-const Header = ({ onMenuClick }) => {
+const Header = ({ onMenuClick, onLogout }) => {
   return (
     <header className="header">
-      <button className="menu-button" onClick={onMenuClick} aria-label="Menu">
-        <div className="hamburger-line"></div>
-        <div className="hamburger-line"></div>
-        <div className="hamburger-line"></div>
-      </button>
-      <h1 className="header-title">Dashboard de Times</h1>
+      <div className="header-left">
+        <button className="menu-button" onClick={onMenuClick}>
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <h1 className="header-title">Dashboard Plane</h1>
+      </div>
+      
+      <div className="header-right">
+        <button className="logout-button" onClick={onLogout} title="Sair">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16,17 21,12 16,7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
     </header>
   );
 };
