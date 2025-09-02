@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
+import TaskAssigneeRanking from './components/TaskAssigneeRanking';
+import { useTeams } from './hooks/useTeams';
 import './App.css';
 
 function App() {
@@ -24,6 +26,19 @@ function App() {
   const [estimates, setEstimates] = useState([]);
   const [members, setMembers] = useState([]);
   const [labels, setLabels] = useState([]);
+  
+  // Hook para gerenciar times
+  const { teams, loading: teamsLoading, error: teamsError, fetchTeams } = useTeams();
+  
+  // Carregar times quando o componente for montado
+  useEffect(() => {
+    fetchTeams();
+  }, [fetchTeams]);
+  
+  // Estados para controle de expansão das seções
+  const [statusCountsExpanded, setStatusCountsExpanded] = useState(true);
+  const [rankingExpanded, setRankingExpanded] = useState(true);
+  const [tasksExpanded, setTasksExpanded] = useState(true);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -206,6 +221,8 @@ function App() {
         return 'Média';
       case 'low':
         return 'Baixa';
+      case 'none':
+        return 'Nenhum';
       default:
         return priority || 'Não definida';
     }
@@ -213,7 +230,33 @@ function App() {
 
   const getStateName = (stateId) => {
     const state = states.find(s => s.id === stateId);
-    return state ? state.name : 'Estado não encontrado';
+    if (!state) return 'Estado não encontrado';
+    
+    // Traduzir nomes de estados específicos
+    switch (state.name.toLowerCase()) {
+      case 'deployed':
+        return 'Implantado';
+      case 'done':
+        return 'Concluído';
+      case 'in progress':
+        return 'Em progresso';
+      case 'todo':
+        return 'A fazer';
+      case 'to review':
+        return 'Para revisão';
+      case 'to test':
+        return 'Para teste';
+      case 'rejected':
+        return 'Rejeitado';
+      case 'testing':
+        return 'Testando';
+      case 'reviewed':
+        return 'Revisado';
+      case 'under review':
+        return 'Em revisão';
+      default:
+        return state.name;
+    }
   };
 
   const getEstimateValue = (estimatePointId) => {
@@ -727,26 +770,63 @@ function App() {
             </div>
 
             <div className="dashboard-cards">
-              <div className="card">
-                <h3>Times Ativos</h3>
-                <p>Gerencie seus times e projetos</p>
-              </div>
-
-              <div className="card">
-                <h3>Projetos</h3>
-                <p>Acompanhe o progresso dos projetos</p>
-              </div>
-
-              <div className="card">
-                <h3>Relatórios</h3>
-                <p>Visualize métricas e estatísticas</p>
+              <div className="card teams-card">
+                <div className="card-header">
+                  <h3>Times Ativos</h3>
+                </div>
+                <div className="card-content">
+                  <p>Visualização dos times disponíveis</p>
+                  <div className="teams-chart-container">
+                    {teamsLoading ? (
+                      <div className="chart-loading">
+                        <div className="loading-spinner">⏳</div>
+                        <span>Carregando dados...</span>
+                      </div>
+                    ) : teamsError ? (
+                      <div className="chart-error">
+                        <span>❌ Erro ao carregar dados</span>
+                      </div>
+                    ) : (
+                      <div className="teams-chart">
+                        <div className="chart-bar">
+                          <div 
+                            className="chart-fill" 
+                            style={{
+                              height: `${Math.min((teams.length / 10) * 100, 100)}%`,
+                              backgroundColor: teams.length > 5 ? '#10b981' : teams.length > 2 ? '#f59e0b' : '#ef4444'
+                            }}
+                          ></div>
+                        </div>
+                        <div className="chart-info">
+                          <div className="chart-number">{teams.length}</div>
+                          <div className="chart-label">Times Ativos</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button 
+                    className="view-teams-btn"
+                    onClick={toggleSidebar}
+                  >
+                    Gerenciar Times
+                  </button>
+                </div>
               </div>
             </div>
           </>
         ) : !selectedCycle ? (
           <div className="team-details">
             <div className="team-header">
-              <h2>{selectedTeam.name}</h2>
+              <h2>
+                {selectedTeam.name}
+                {(selectedTeam.name.toLowerCase().includes('transferência') || 
+                  selectedTeam.name.toLowerCase().includes('pagamento') || 
+                  selectedTeam.name.toLowerCase().includes('pix')) && 
+                  <span style={{marginLeft: '12px', fontSize: '0.8em', color: '#FFD700'}}>
+                    👑 💰
+                  </span>
+                }
+              </h2>
               {selectedTeam.description && (
                 <p className="team-description">{selectedTeam.description}</p>
               )}
@@ -868,19 +948,49 @@ function App() {
             </div>
 
             <div className="status-counts-section">
-              <h4>Total de tarefas por status:</h4>
-              <div className="status-counts-grid">
-                {Object.entries(getTaskCountsByStatus()).map(([status, count]) => (
-                  <div key={status} className="status-count-item">
-                    <span className="status-name">{status}:</span>
-                    <span className="status-count">{count}</span>
-                  </div>
-                ))}
+              <div 
+                className="section-header clickable"
+                onClick={() => setStatusCountsExpanded(!statusCountsExpanded)}
+              >
+                <h4>📊 Total de tarefas por status</h4>
+                <span className={`expand-icon ${statusCountsExpanded ? 'expanded' : 'collapsed'}`}>
+                  {statusCountsExpanded ? '▼' : '▶'}
+                </span>
               </div>
+              {statusCountsExpanded && (
+                <div className="status-counts-grid">
+                  {Object.entries(getTaskCountsByStatus()).map(([status, count]) => (
+                    <div key={status} className="status-count-item">
+                      <span className="status-name">{status}:</span>
+                      <span className="status-count">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
+            <TaskAssigneeRanking 
+              tasks={filteredTasks}
+              members={members}
+              states={states}
+              isExpanded={rankingExpanded}
+              onToggleExpand={() => setRankingExpanded(!rankingExpanded)}
+            />
+
             <div className="tasks-section">
-              {tasksLoading && (
+              <div 
+                className="section-header clickable"
+                onClick={() => setTasksExpanded(!tasksExpanded)}
+              >
+                <h4>📋 Lista de Tarefas ({filteredTasks.length})</h4>
+                <span className={`expand-icon ${tasksExpanded ? 'expanded' : 'collapsed'}`}>
+                  {tasksExpanded ? '▼' : '▶'}
+                </span>
+              </div>
+              
+              {tasksExpanded && (
+                <>
+                {tasksLoading && (
                 <div className="loading-tasks">
                   <div className="spinner"></div>
                   <p>Carregando tarefas...</p>
@@ -955,6 +1065,8 @@ function App() {
                     ))
                   )}
                 </div>
+              )}
+                </>
               )}
             </div>
           </div>

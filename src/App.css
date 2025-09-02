@@ -11,7 +11,8 @@
   margin-left: 0;
   transition: margin-left 0.3s ease;
   overflow-y: auto;
-  padding-top: 80px; /* Espaço para não ser engolido pela toolbar */
+  padding-top: 80px;
+  /* Espaço para não ser engolido pela toolbar */
 }
 
 .welcome-section {
@@ -68,6 +69,143 @@
 .card p {
   color: #64748b;
   margin: 0;
+}
+
+/* Teams Card Styles */
+.teams-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.teams-card .card-header {
+  margin-bottom: 20px;
+}
+
+.teams-card .card-header h3 {
+  margin: 0;
+  color: #1e3a8a;
+}
+
+.teams-chart-container {
+  margin: 20px 0;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: #64748b;
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.chart-error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.teams-chart {
+  display: flex;
+  align-items: end;
+  gap: 30px;
+  padding: 20px;
+}
+
+.chart-bar {
+  width: 60px;
+  height: 120px;
+  background: #e2e8f0;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chart-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 0 0 8px 8px;
+  transition: all 0.8s ease;
+  background: linear-gradient(to top, currentColor, rgba(255, 255, 255, 0.2));
+}
+
+.chart-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chart-number {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #1e3a8a;
+  line-height: 1;
+}
+
+.chart-label {
+  font-size: 1.1rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.chart-status {
+  font-size: 0.9rem;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+  display: inline-block;
+  width: fit-content;
+}
+
+.chart-status:contains('Excelente') {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.view-teams-btn {
+  width: 100%;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
+.view-teams-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
 /* Team Details Styles */
@@ -138,7 +276,8 @@
   font-size: 1.8rem;
 }
 
-.loading-cycles, .error-cycles {
+.loading-cycles,
+.error-cycles {
   text-align: center;
   padding: 40px;
 }
@@ -381,6 +520,7 @@
   border-radius: 20px;
   font-size: 14px;
 }
+
 .status-counts-header {
   display: flex;
   justify-content: space-between;
@@ -588,6 +728,7 @@
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
 }
+
 .modal-info {
   background: #eff6ff;
   border: 1px solid #2563eb;
@@ -743,6 +884,7 @@
   background: #e5e7eb;
   border-color: #9ca3af;
 }
+
 .btn-secondary:hover {
   background: #4b5563;
 }
@@ -786,7 +928,8 @@
   }
 }
 
-.loading-tasks, .error-tasks {
+.loading-tasks,
+.error-tasks {
   text-align: center;
   padding: 40px;
 }
@@ -902,6 +1045,158 @@
   font-size: 1.1rem;
 }
 
+/* Estilos para funcionalidade de expandir/recolher removidos - usando estilos existentes */
+
+/* Estilos para seções expansíveis */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.section-header.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header.clickable:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.section-header h3,
+.section-header h4 {
+  margin: 0;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.expand-icon {
+  font-size: 16px;
+  font-weight: bold;
+  color: #1e3a8a;
+  transition: transform 0.2s ease;
+  min-width: 20px;
+  text-align: center;
+}
+
+.expand-icon.expanded {
+  transform: rotate(0deg);
+}
+
+.expand-icon.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Animações para conteúdo expansível */
+.status-counts-grid,
+.ranking-list,
+.tasks-grid {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ajustes para seções específicas */
+.status-counts-section .section-header,
+.tasks-section .section-header {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+}
+
+.assignee-ranking .section-header {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+}
+
+.assignee-ranking .section-header:hover {
+  background: linear-gradient(135deg, #fde68a 0%, #fbbf24 100%);
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 15px;
+    padding-top: 70px;
+  }
+
+  .dashboard-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .team-details {
+    padding: 15px;
+  }
+
+  .cycles-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tasks-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-card {
+    padding: 15px;
+  }
+
+  .task-info {
+    grid-template-columns: 1fr;
+  }
+
+  .status-counts-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .filters-section {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-group label {
+    margin-bottom: 5px;
+  }
+
+  .tasks-header-with-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+
+  .export-report-btn {
+    align-self: stretch;
+  }
+
+  .section-header {
+    padding: 10px 12px;
+  }
+
+  .section-header h3,
+  .section-header h4 {
+    font-size: 16px;
+  }
+}
+
 /* Estilos para filtro de data no modal */
 .date-filter-section {
   margin-bottom: 25px;
@@ -985,6 +1280,7 @@
   color: #1e3a8a;
   font-size: 14px;
 }
+
 .modal-info {
   background: #eff6ff;
   border: 1px solid #2563eb;
@@ -1054,6 +1350,7 @@
   background: #e5e7eb;
   border-color: #9ca3af;
 }
+
 .btn-secondary:hover {
   background: #4b5563;
 }
@@ -1097,7 +1394,8 @@
   }
 }
 
-.loading-tasks, .error-tasks {
+.loading-tasks,
+.error-tasks {
   text-align: center;
   padding: 40px;
 }
