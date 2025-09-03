@@ -103,6 +103,11 @@
   font-weight: 600;
 }
 
+.stat-item.points .stat-value {
+  color: #dc2626;
+  font-weight: 700;
+}
+
 .stat-item.completed .stat-value {
   color: #059669;
 }
@@ -168,6 +173,13 @@
 .ranking-summary strong {
   color: #1e3a8a;
   margin: 0 4px;
+}
+
+.points-explanation {
+  margin-top: 8px !important;
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  font-style: italic;
 }
 
 .no-data {

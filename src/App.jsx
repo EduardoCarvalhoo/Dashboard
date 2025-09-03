@@ -820,54 +820,117 @@ function App() {
         {!selectedTeam ? (
           <>
             <div className="welcome-section">
-              <h2>Bem-vindo ao Dashboard</h2>
-              <p>Clique no menu para ver os times disponíveis.</p>
-            </div>
+            <h2>Bem-vindo ao Dashboard</h2>
+            <p>Clique no menu para ver os times disponíveis.</p>
+          </div>
 
-            <div className="dashboard-cards">
-              <div className="card teams-card">
-                <div className="card-header">
-                  <h3>Times Ativos</h3>
+          <div className="dashboard-cards">
+            <div className="card teams-card">
+              <div className="card-header">
+                <h3>Times Ativos</h3>
+              </div>
+              <div className="card-content">
+                <p>Visualização dos times disponíveis</p>
+                <div className="teams-chart-container">
+                  {teamsLoading ? (
+                    <div className="chart-loading">
+                      <div className="loading-spinner">⏳</div>
+                      <span>Carregando dados...</span>
+                    </div>
+                  ) : teamsError ? (
+                    <div className="chart-error">
+                      <span>❌ Erro ao carregar dados</span>
+                    </div>
+                  ) : (
+                    <div className="teams-chart">
+                      <div className="chart-bar">
+                        <div 
+                          className="chart-fill" 
+                          style={{
+                            height: `${Math.min((teams.length / 10) * 100, 100)}%`,
+                            backgroundColor: teams.length > 5 ? '#10b981' : teams.length > 2 ? '#f59e0b' : '#ef4444'
+                          }}
+                        ></div>
+                      </div>
+                      <div className="chart-info">
+                        <div className="chart-number">{teams.length}</div>
+                        <div className="chart-label">Times Ativos</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="card-content">
-                  <p>Visualização dos times disponíveis</p>
-                  <div className="teams-chart-container">
-                    {teamsLoading ? (
-                      <div className="chart-loading">
-                        <div className="loading-spinner">⏳</div>
-                        <span>Carregando dados...</span>
-                      </div>
-                    ) : teamsError ? (
-                      <div className="chart-error">
-                        <span>❌ Erro ao carregar dados</span>
-                      </div>
-                    ) : (
-                      <div className="teams-chart">
-                        <div className="chart-bar">
-                          <div 
-                            className="chart-fill" 
-                            style={{
-                              height: `${Math.min((teams.length / 10) * 100, 100)}%`,
-                              backgroundColor: teams.length > 5 ? '#10b981' : teams.length > 2 ? '#f59e0b' : '#ef4444'
-                            }}
-                          ></div>
-                        </div>
-                        <div className="chart-info">
-                          <div className="chart-number">{teams.length}</div>
-                          <div className="chart-label">Times Ativos</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <button 
-                    className="view-teams-btn"
-                    onClick={toggleSidebar}
-                  >
-                    Gerenciar Times
-                  </button>
-                </div>
+                <button 
+                  className="view-teams-btn"
+                  onClick={toggleSidebar}
+                >
+                  Gerenciar Times
+                </button>
               </div>
             </div>
+
+            <div className="card metrics-card">
+              <div className="card-header">
+                <h3>📊 Métricas de Entregas</h3>
+              </div>
+              <div className="card-content">
+                <p>Times com mais entregas no mês</p>
+                <div className="metrics-chart-container">
+                  <div className="chart-loading">
+                    <div className="loading-spinner">⏳</div>
+                    <span>Em desenvolvimento...</span>
+                  </div>
+                </div>
+                <button 
+                  className="view-metrics-btn"
+                  disabled
+                >
+                  Ver Métricas
+                </button>
+              </div>
+            </div>
+
+            <div className="card quality-card">
+              <div className="card-header">
+                <h3>🐛 Métricas de Qualidade</h3>
+              </div>
+              <div className="card-content">
+                <p>Times com mais/menos bugs</p>
+                <div className="quality-chart-container">
+                  <div className="chart-loading">
+                    <div className="loading-spinner">⏳</div>
+                    <span>Em desenvolvimento...</span>
+                  </div>
+                </div>
+                <button 
+                  className="view-quality-btn"
+                  disabled
+                >
+                  Ver Qualidade
+                </button>
+              </div>
+            </div>
+
+            <div className="card developer-card">
+              <div className="card-header">
+                <h3>🏆 Desenvolvedor do Mês</h3>
+              </div>
+              <div className="card-content">
+                <p>O dev que mais entregou tarefas no mês</p>
+                <div className="developer-chart-container">
+                  <div className="chart-loading">
+                    <div className="loading-spinner">⏳</div>
+                    <span>Em desenvolvimento...</span>
+                  </div>
+                </div>
+                <button 
+                  className="view-developer-btn"
+                  disabled
+                >
+                  Ver Ranking
+                </button>
+              </div>
+            </div>
+          </div>
           </>
         ) : !selectedCycle ? (
           <div className="team-details">

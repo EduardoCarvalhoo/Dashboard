@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import './TaskAssigneeRanking.css';
 
-const TaskAssigneeRanking = ({ tasks, members, states, isExpanded = true, onToggleExpand }) => {
+const TaskAssigneeRanking = ({ tasks, members, states, estimates, getEstimateValue, isExpanded = true, onToggleExpand }) => {
   // Calcular ranking dos engenheiros
   const assigneeRanking = useMemo(() => {
     if (!tasks || !members || !states) return [];
@@ -48,7 +48,8 @@ const TaskAssigneeRanking = ({ tasks, members, states, isExpanded = true, onTogg
               totalTasks: 0,
               completedTasks: 0,
               inProgressTasks: 0,
-              pendingTasks: 0
+              pendingTasks: 0,
+              totalPoints: 0
             });
           }
         });
@@ -62,6 +63,11 @@ const TaskAssigneeRanking = ({ tasks, members, states, isExpanded = true, onTogg
           const stats = assigneeStats.get(assigneeId);
           if (stats) {
             stats.totalTasks++;
+            
+            // Obter pontos da tarefa
+            const taskPoints = getEstimateValue ? getEstimateValue(task.estimate_point) : 0;
+            const points = (taskPoints === 'N/A' || isNaN(taskPoints)) ? 0 : Number(taskPoints);
+            stats.totalPoints += points;
             
             if (isTaskCompleted(task)) {
               stats.completedTasks++;
@@ -85,14 +91,17 @@ const TaskAssigneeRanking = ({ tasks, members, states, isExpanded = true, onTogg
       completionRate: stats.totalTasks > 0 ? (stats.completedTasks / stats.totalTasks) * 100 : 0
     }));
 
-    // Ordenar por tarefas concluídas (decrescente) e depois por taxa de conclusão
+    // Ordenar por pontos totais (decrescente), depois por tarefas concluídas e por último por taxa de conclusão
     return rankingArray.sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) {
+        return b.totalPoints - a.totalPoints;
+      }
       if (b.completedTasks !== a.completedTasks) {
         return b.completedTasks - a.completedTasks;
       }
       return b.completionRate - a.completionRate;
     });
-  }, [tasks, members, states]);
+  }, [tasks, members, states, estimates, getEstimateValue]);
 
   return (
     <div className="assignee-ranking">
@@ -133,6 +142,11 @@ const TaskAssigneeRanking = ({ tasks, members, states, isExpanded = true, onTogg
                 </div>
                 
                 <div className="assignee-stats">
+                  <div className="stat-item points">
+                    <span className="stat-label">Pontos:</span>
+                    <span className="stat-value">{assignee.totalPoints}</span>
+                  </div>
+                  
                   <div className="stat-item completed">
                     <span className="stat-label">Concluídas:</span>
                     <span className="stat-value">{assignee.completedTasks}</span>
@@ -164,8 +178,12 @@ const TaskAssigneeRanking = ({ tasks, members, states, isExpanded = true, onTogg
               <div className="ranking-summary">
                 <p>
                   <strong>Total de engenheiros:</strong> {assigneeRanking.length} |
+                  <strong> Pontos totais:</strong> {assigneeRanking.reduce((sum, a) => sum + a.totalPoints, 0)} |
                   <strong> Tarefas concluídas:</strong> {assigneeRanking.reduce((sum, a) => sum + a.completedTasks, 0)} |
                   <strong> Total de tarefas:</strong> {assigneeRanking.reduce((sum, a) => sum + a.totalTasks, 0)}
+                </p>
+                <p className="points-explanation">
+                  <strong>Classificação:</strong> Baseada na soma dos pontos de estimativa das tarefas de cada engenheiro
                 </p>
               </div>
             </>
