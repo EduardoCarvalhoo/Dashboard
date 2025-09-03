@@ -42,7 +42,7 @@ const LoginEmail = ({ onEmailSubmit, isLoading }) => {
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu.email@delbank.com.br"
+              placeholder="engineer@hotmail.com.br"
               disabled={isLoading}
               className={error ? 'error' : ''}
             />
