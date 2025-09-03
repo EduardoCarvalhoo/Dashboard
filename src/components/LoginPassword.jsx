@@ -33,38 +33,20 @@ const LoginPassword = ({ email, onPasswordSubmit, onBackToEmail, isLoading }) =>
         <div className="email-display">
           <span className="email-label">Email:</span>
           <span className="email-value">{email}</span>
-          <button 
-            type="button" 
-            className="change-email-btn"
-            onClick={onBackToEmail}
-            disabled={isLoading}
-          >
-            Alterar
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
             <label htmlFor="password">Senha</label>
-            <div className="password-input-container">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Digite sua senha"
-                disabled={isLoading}
-                className={error ? 'error' : ''}
-              />
-              <button
-                type="button"
-                className="toggle-password"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
-              >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
-              </button>
-            </div>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Digite sua senha"
+              disabled={isLoading}
+              className={error ? 'error' : ''}
+            />
             {error && <span className="error-message">{error}</span>}
           </div>
 
@@ -74,6 +56,15 @@ const LoginPassword = ({ email, onPasswordSubmit, onBackToEmail, isLoading }) =>
             disabled={isLoading}
           >
             {isLoading ? 'Entrando...' : 'Entrar'}
+          </button>
+          
+          <button 
+            type="button" 
+            className="back-button"
+            onClick={onBackToEmail}
+            disabled={isLoading}
+          >
+            Voltar
           </button>
         </form>
       </div>

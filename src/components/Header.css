@@ -11,6 +11,34 @@
   width: 100%;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.logout-button {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logout-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .menu-button {
@@ -26,6 +54,15 @@
   height: 42px;
   transition: all 0.2s ease;
   border-radius: 4px;
+}
+
+.menu-button span {
+  display: block;
+  height: 4px;
+  width: 100%;
+  background-color: white;
+  border-radius: 2px;
+  transition: all 0.2s ease;
 }
 
 .menu-button:hover {
@@ -47,7 +84,6 @@
   margin: 0;
 }
 
-/* Responsividade */
 @media (max-width: 768px) {
   .header-content {
     padding: 0 0.5rem;
