@@ -51,8 +51,7 @@ class AuthService {
           'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
           'Content-Type': 'application/json',
           'X-CSRFToken': this.csrfToken,
-          'Origin': this.baseUrl,
-          'Referer': `${this.baseUrl}/?next_path=/del-tech/projects/d425304e-af04-41e1-ad98-96f1de4f1e5b/cycles/`
+          'Origin': this.baseUrl
         },
         body: JSON.stringify({ email })
       });
@@ -62,6 +61,11 @@ class AuthService {
       if (response.ok) {
         const data = await response.json();
         console.log('Email verificado com sucesso:', data);
+        
+        if (data.existing === false) {
+          throw new Error('Você não tem autorização para acessar o sistema!');
+        }
+        
         return data;
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -77,7 +81,6 @@ class AuthService {
   // Fazer login com senha
   async signIn(email, password) {
     try {
-      // Garantir que temos o token CSRF mais recente
       if (!this.csrfToken) {
         await this.getCsrfToken();
       }
@@ -86,39 +89,87 @@ class AuthService {
       formData.append('csrfmiddlewaretoken', this.csrfToken);
       formData.append('email', email);
       formData.append('password', password);
-      formData.append('next_path', '/del-tech/projects/d425304e-af04-41e1-ad98-96f1de4f1e5b/cycles/');
 
       const response = await fetch(`/auth/sign-in/`, {
         method: 'POST',
         credentials: 'include',
+        redirect: 'follow',
         headers: {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
           'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Origin': this.baseUrl,
-          'Referer': `${this.baseUrl}/?next_path=/del-tech/projects/d425304e-af04-41e1-ad98-96f1de4f1e5b/cycles/`
+          'Origin': this.baseUrl
         },
         body: formData
       });
 
-      if (response.ok || response.redirected) {
-        // Extrair cookies da resposta
-        const cookies = response.headers.get('set-cookie');
-        if (cookies) {
-          this.extractTokensFromCookies(cookies);
-        }
+      console.log('Response status:', response.status);
+
+      // Verificar se o proxy retornou erro de autorização
+      if (response.status === 401) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Usuário não autorizado a acessar este sistema.');
+      }
+
+      if (response.ok || response.status === 302) {
+        // Aguardar um pouco para os cookies serem definidos
+        await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Salvar tokens no localStorage para persistência
+        // Extrair tokens dos cookies
+        this.extractTokensFromDocument();
         this.saveTokensToStorage();
-        
         return { success: true };
       } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || errorData.message || 'Credenciais inválidas');
+        throw new Error('Falha na autenticação. Verifique suas credenciais.');
       }
     } catch (error) {
       console.error('Erro ao fazer login:', error);
       throw error;
+    }
+  }
+
+  // Método para extrair tokens dos cookies do documento
+  extractTokensFromDocument() {
+    const cookies = document.cookie;
+    const cookieArray = cookies.split(';');
+    
+    for (let cookie of cookieArray) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'csrftoken') {
+        this.csrfToken = value;
+      } else if (name === 'sessionid') {
+        this.sessionId = value;
+      }
+    }
+    
+    console.log('Tokens extraídos dos cookies:', {
+      csrfToken: this.csrfToken,
+      sessionId: this.sessionId
+    });
+  }
+
+  // Novo método para carregar tokens dos cookies do navegador
+  async loadTokensFromCookies() {
+    try {
+      // Fazer uma requisição simples para verificar se estamos autenticados
+      const response = await fetch('/api/users/me/', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        // Se a requisição foi bem-sucedida, extrair tokens dos cookies
+        const cookies = document.cookie;
+        this.extractTokensFromCookies(cookies);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Erro ao carregar tokens dos cookies:', error);
+      return false;
     }
   }
 
