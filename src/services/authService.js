@@ -208,6 +208,14 @@ class AuthService {
     return !!(this.csrfToken && this.sessionId);
   }
 
+  // Obter tokens atuais
+  getTokens() {
+    return {
+      csrfToken: this.csrfToken,
+      sessionId: this.sessionId
+    };
+  }
+
   // Fazer logout
   logout() {
     this.csrfToken = null;

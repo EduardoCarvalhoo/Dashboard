@@ -11,8 +11,6 @@ export function useTeams() {
     dispatch({ type: 'SET_ERROR', key: 'teams', value: null });
     
     try {
-      // Usar o mesmo endpoint do menu: /api/workspaces/del-tech/projects/
-      console.log('📡 Carregando times do endpoint de projetos...');
       const response = await fetch('/api/workspaces/del-tech/projects/', {
         method: 'GET',
         headers: {
@@ -22,7 +20,15 @@ export function useTeams() {
       });
       
       if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+        let errorMessage;
+        if (response.status === 403) {
+          errorMessage = 'Você não tem permissão para acessar esse projeto!';
+        } else if (response.status === 401) {
+          errorMessage = 'Sua sessão expirou. Faça login novamente.';
+        } else {
+          errorMessage = `Erro ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
@@ -31,7 +37,8 @@ export function useTeams() {
       dispatch({ type: 'SET_TEAMS', teams });
       return teams;
     } catch (error) {
-      console.warn('⚠️ Falha na API, usando dados mockados:', error.message);
+      console.warn('⚠️ Falha na API:', error.message);
+      dispatch({ type: 'SET_ERROR', key: 'teams', value: error.message });
       
       // Fallback para dados mockados em caso de erro na API
       const mockTeams = [
