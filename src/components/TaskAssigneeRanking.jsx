@@ -49,7 +49,8 @@ const TaskAssigneeRanking = ({ tasks, members, states, estimates, getEstimateVal
               completedTasks: 0,
               inProgressTasks: 0,
               pendingTasks: 0,
-              totalPoints: 0
+              totalPoints: 0,
+              totalEstimatedPoints: 0
             });
           }
         });
@@ -64,13 +65,16 @@ const TaskAssigneeRanking = ({ tasks, members, states, estimates, getEstimateVal
           if (stats) {
             stats.totalTasks++;
             
-            // Obter pontos da tarefa
+            // Obter pontos da tarefa para TODAS as tarefas (estimativa total)
             const taskPoints = getEstimateValue ? getEstimateValue(task.estimate_point) : 0;
             const points = (taskPoints === 'N/A' || isNaN(taskPoints)) ? 0 : Number(taskPoints);
-            stats.totalPoints += points;
+            stats.totalEstimatedPoints += points;
             
             if (isTaskCompleted(task)) {
               stats.completedTasks++;
+              
+              // Obter pontos da tarefa APENAS se estiver concluída (para ranking)
+              stats.totalPoints += points;
             } else {
               // Verificar se está em progresso ou pendente
               const state = states.find(s => s.id === task.state_id);
@@ -143,7 +147,7 @@ const TaskAssigneeRanking = ({ tasks, members, states, estimates, getEstimateVal
                 
                 <div className="assignee-stats">
                   <div className="stat-item points">
-                    <span className="stat-label">Pontos:</span>
+                    <span className="stat-label">Pontos entregues:</span>
                     <span className="stat-value">{assignee.totalPoints}</span>
                   </div>
                   
@@ -153,8 +157,13 @@ const TaskAssigneeRanking = ({ tasks, members, states, estimates, getEstimateVal
                   </div>
                   
                   <div className="stat-item total">
-                    <span className="stat-label">Total:</span>
+                    <span className="stat-label">Total de tarefas:</span>
                     <span className="stat-value">{assignee.totalTasks}</span>
+                  </div>
+                  
+                  <div className="stat-item estimated">
+                    <span className="stat-label">Pontos estimados:</span>
+                    <span className="stat-value">{assignee.totalEstimatedPoints}</span>
                   </div>
                   
                   <div className="stat-item rate">

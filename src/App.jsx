@@ -266,6 +266,23 @@ function App() {
     }
   };
 
+  const getPriorityIcon = (priority) => {
+    switch (priority) {
+      case 'urgent':
+        return '🚨'; // Sirene para urgente
+      case 'high':
+        return '🔴'; // Círculo vermelho para alta
+      case 'medium':
+        return '🟡'; // Círculo amarelo para média
+      case 'low':
+        return '🟢'; // Círculo verde para baixa
+      case 'none':
+        return '⚪'; // Círculo branco para nenhuma
+      default:
+        return '❓'; // Interrogação para não definida
+    }
+  };
+
   const getPriorityText = (priority) => {
     switch (priority) {
       case 'urgent':
@@ -737,7 +754,7 @@ function App() {
             <div class="task-header">
               <h4 class="task-name">${task.name}</h4>
               <span class="task-priority" style="background-color: ${getPriorityColor(task.priority)}">
-                ${getPriorityText(task.priority)}
+                ${getPriorityIcon(task.priority)} ${getPriorityText(task.priority)}
               </span>
             </div>
             
@@ -1091,6 +1108,8 @@ function App() {
               tasks={filteredTasks}
               members={members}
               states={states}
+              estimates={estimates}
+              getEstimateValue={getEstimateValue}
               isExpanded={rankingExpanded}
               onToggleExpand={() => setRankingExpanded(!rankingExpanded)}
             />
@@ -1145,7 +1164,7 @@ function App() {
                               color: 'white'
                             }}
                           >
-                            {getPriorityText(task.priority)}
+                            {getPriorityIcon(task.priority)} {getPriorityText(task.priority)}
                           </span>
                         </div>
 
