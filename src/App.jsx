@@ -860,17 +860,24 @@ function App() {
                     </div>
                   ) : (
                     <div className="teams-chart">
-                      <div className="chart-bar">
-                        <div 
-                          className="chart-fill" 
-                          style={{
-                            height: `${Math.min((teams.length / 10) * 100, 100)}%`,
-                            backgroundColor: teams.length > 5 ? '#10b981' : teams.length > 2 ? '#f59e0b' : '#ef4444'
-                          }}
-                        ></div>
+                      <div className="chart-pie">
+                        <div className="pie-chart">
+                          <div 
+                            className="pie-slice" 
+                            style={{
+                              background: `conic-gradient(
+                                ${teams.length > 5 ? '#10b981' : teams.length > 2 ? '#f59e0b' : '#ef4444'} 0deg ${(teams.length / 10) * 360}deg,
+                                #e2e8f0 ${(teams.length / 10) * 360}deg 360deg
+                              )`
+                            }}
+                          >
+                            <div className="pie-center">
+                              <div className="chart-number">{teams.length}</div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <div className="chart-info">
-                        <div className="chart-number">{teams.length}</div>
                         <div className="chart-label">Times Ativos</div>
                       </div>
                     </div>

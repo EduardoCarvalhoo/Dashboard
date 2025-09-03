@@ -195,7 +195,7 @@
 
 .teams-chart {
   display: flex;
-  align-items: end;
+  align-items: center;
   gap: 30px;
   padding: 20px;
 }
@@ -220,11 +220,57 @@
   background: linear-gradient(to top, currentColor, rgba(255, 255, 255, 0.2));
 }
 
+.chart-pie {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.pie-chart {
+  width: 120px;
+  height: 120px;
+  position: relative;
+}
+
+.pie-slice {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.8s ease;
+}
+
+.pie-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 50%;
+  width: 75px;
+  height: 75px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pie-center .chart-number {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #1e3a8a;
+  line-height: 1;
+}
+
 .chart-info {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  justify-content: center;
 }
 
 .chart-number {
