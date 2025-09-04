@@ -30,7 +30,17 @@ class ApiService {
         clearTimeout(timeoutId);
         
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          let errorMessage;
+          if (response.status === 403) {
+            errorMessage = 'Você não tem permissão para acessar esse projeto!';
+          } else if (response.status === 401) {
+            errorMessage = 'Sua sessão expirou. Faça login novamente.';
+          } else if (response.status === 404) {
+            errorMessage = 'Recurso não encontrado.';
+          } else {
+            errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          }
+          throw new Error(errorMessage);
         }
         
         return await response.json();

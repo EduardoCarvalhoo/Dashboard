@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
+import TaskAssigneeRanking from './components/TaskAssigneeRanking';
+import { useTeams } from './hooks/useTeams';
+import AuthFlow from './components/AuthFlow';
+import authService from './services/authService';
 import './App.css';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authTokens, setAuthTokens] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [selectedCycle, setSelectedCycle] = useState(null);
+  const [showTeamsList, setShowTeamsList] = useState(false);
   const [cycles, setCycles] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
@@ -25,9 +33,72 @@ function App() {
   const [members, setMembers] = useState([]);
   const [labels, setLabels] = useState([]);
 
+  // Hook para gerenciar times
+  const { teams, loading: teamsLoading, error: teamsError, fetchTeams } = useTeams();
+
+  // Carregar times quando o componente for montado
+  useEffect(() => {
+    fetchTeams();
+  }, [fetchTeams]);
+
+  // Estados para controle de expansão das seções
+  const [statusCountsExpanded, setStatusCountsExpanded] = useState(true);
+  const [rankingExpanded, setRankingExpanded] = useState(true);
+  const [tasksExpanded, setTasksExpanded] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = () => {
+      authService.loadTokensFromStorage();
+      const authenticated = authService.isAuthenticated();
+      setIsAuthenticated(authenticated);
+      if (authenticated) {
+        setAuthTokens(authService.getTokens());
+      }
+      setAuthLoading(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  const handleAuthSuccess = (tokens) => {
+    setAuthTokens(tokens);
+    setIsAuthenticated(true);
+
+    console.log('Login realizado com sucesso:', {
+      csrfToken: tokens.csrfToken,
+      sessionId: tokens.sessionId
+    });
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    setIsAuthenticated(false);
+    setAuthTokens(null);
+    setSelectedTeam(null);
+    setSelectedCycle(null);
+    setCycles([]);
+    setTasks([]);
+    setFilteredTasks([]);
+  };
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="auth-loading">
+          <div className="spinner"></div>
+          <p>Verificando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AuthFlow onAuthSuccess={handleAuthSuccess} />;
+  }
 
   // Função para buscar dados auxiliares
   const fetchAuxiliaryData = async () => {
@@ -66,30 +137,56 @@ function App() {
       if (statesRes.ok) {
         const statesData = await statesRes.json();
         setStates(statesData.results || statesData || []);
+      } else {
+        console.error('Erro ao buscar estados:', getErrorMessage({message: statesRes.statusText}, statesRes.status));
       }
 
       if (estimatesRes.ok) {
         const estimatesData = await estimatesRes.json();
         setEstimates(estimatesData.results || estimatesData || []);
+      } else {
+        console.error('Erro ao buscar estimativas:', getErrorMessage({message: estimatesRes.statusText}, estimatesRes.status));
       }
 
       if (membersRes.ok) {
         const membersData = await membersRes.json();
         setMembers(membersData.results || membersData || []);
+      } else {
+        console.error('Erro ao buscar membros:', getErrorMessage({message: membersRes.statusText}, membersRes.status));
       }
 
       if (labelsRes.ok) {
         const labelsData = await labelsRes.json();
         setLabels(labelsData.results || labelsData || []);
+      } else {
+        console.error('Erro ao buscar labels:', getErrorMessage({message: labelsRes.statusText}, labelsRes.status));
       }
     } catch (error) {
-      console.error('Erro ao buscar dados auxiliares:', error);
+      console.error('Erro ao buscar dados auxiliares:', getErrorMessage(error, error.status));
     }
+  };
+
+  // Função para tratar mensagens de erro mais amigáveis
+  const getErrorMessage = (error, status) => {
+    if (status === 403 || error.message.includes('403') || error.message.includes('Forbidden')) {
+      return 'Você não tem permissão para acessar esse projeto!';
+    }
+    if (status === 401 || error.message.includes('401') || error.message.includes('Unauthorized')) {
+      return 'Sua sessão expirou. Faça login novamente.';
+    }
+    if (status === 404 || error.message.includes('404') || error.message.includes('Not Found')) {
+      return 'Recurso não encontrado.';
+    }
+    if (status === 500 || error.message.includes('500') || error.message.includes('Internal Server Error')) {
+      return 'Erro interno do servidor. Tente novamente mais tarde.';
+    }
+    return error.message || 'Erro desconhecido';
   };
 
   const handleTeamSelect = async (team) => {
     setSelectedTeam(team);
     setSelectedCycle(null);
+    setShowTeamsList(false);
     setTasks([]);
     setFilteredTasks([]);
     setCyclesLoading(true);
@@ -111,13 +208,15 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+        const errorMessage = getErrorMessage({ message: response.statusText }, response.status);
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       setCycles(data.results || data || []);
     } catch (err) {
-      setCyclesError(err.message);
+      const friendlyError = getErrorMessage(err, null);
+      setCyclesError(friendlyError);
       console.error('Erro ao buscar ciclos:', err);
     } finally {
       setCyclesLoading(false);
@@ -139,7 +238,8 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
+        const errorMessage = getErrorMessage({ message: response.statusText }, response.status);
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -148,7 +248,8 @@ function App() {
       setFilteredTasks(tasksList);
       setSelectedAssignee('');
     } catch (err) {
-      setTasksError(err.message);
+      const friendlyError = getErrorMessage(err, null);
+      setTasksError(friendlyError);
       console.error('Erro ao buscar tarefas:', err);
     } finally {
       setTasksLoading(false);
@@ -196,6 +297,23 @@ function App() {
     }
   };
 
+  const getPriorityIcon = (priority) => {
+    switch (priority) {
+      case 'urgent':
+        return '🚨'; // Sirene para urgente
+      case 'high':
+        return '🔴'; // Círculo vermelho para alta
+      case 'medium':
+        return '🟡'; // Círculo amarelo para média
+      case 'low':
+        return '🟢'; // Círculo verde para baixa
+      case 'none':
+        return '⚪'; // Círculo branco para nenhuma
+      default:
+        return '❓'; // Interrogação para não definida
+    }
+  };
+
   const getPriorityText = (priority) => {
     switch (priority) {
       case 'urgent':
@@ -206,6 +324,8 @@ function App() {
         return 'Média';
       case 'low':
         return 'Baixa';
+      case 'none':
+        return 'Nenhum';
       default:
         return priority || 'Não definida';
     }
@@ -213,7 +333,33 @@ function App() {
 
   const getStateName = (stateId) => {
     const state = states.find(s => s.id === stateId);
-    return state ? state.name : 'Estado não encontrado';
+    if (!state) return 'Estado não encontrado';
+
+    // Traduzir nomes de estados específicos
+    switch (state.name.toLowerCase()) {
+      case 'deployed':
+        return 'Implantado';
+      case 'done':
+        return 'Concluído';
+      case 'in progress':
+        return 'Em progresso';
+      case 'todo':
+        return 'A fazer';
+      case 'to review':
+        return 'Para revisão';
+      case 'to test':
+        return 'Para teste';
+      case 'rejected':
+        return 'Rejeitado';
+      case 'testing':
+        return 'Testando';
+      case 'reviewed':
+        return 'Revisado';
+      case 'under review':
+        return 'Em revisão';
+      default:
+        return state.name;
+    }
   };
 
   const getEstimateValue = (estimatePointId) => {
@@ -343,7 +489,7 @@ function App() {
       const historyData = await response.json();
       return historyData.results || historyData || [];
     } catch (error) {
-      console.error(`Erro ao buscar histórico da tarefa ${taskId}:`, error);
+      console.error(`Erro ao buscar histórico da tarefa ${taskId}:`, getErrorMessage(error, error.status));
       return null;
     }
   };
@@ -639,7 +785,7 @@ function App() {
             <div class="task-header">
               <h4 class="task-name">${task.name}</h4>
               <span class="task-priority" style="background-color: ${getPriorityColor(task.priority)}">
-                ${getPriorityText(task.priority)}
+                ${getPriorityIcon(task.priority)} ${getPriorityText(task.priority)}
               </span>
             </div>
             
@@ -692,9 +838,17 @@ function App() {
     setShowReportModal(false);
   };
 
+  const handleShowTeamsList = () => {
+    setShowTeamsList(true);
+    setSelectedTeam(null);
+    setSelectedCycle(null);
+    setTasks([]);
+    setFilteredTasks([]);
+    setSidebarOpen(false);
+  };
+
   const handleBackToPrevious = () => {
     if (selectedCycle) {
-      // Se estamos vendo tarefas, voltar para ciclos
       setSelectedCycle(null);
       setTasks([]);
       setFilteredTasks([]);
@@ -702,24 +856,27 @@ function App() {
       setSelectedAssignee('');
       setSelectedStatus('');
     } else if (selectedTeam) {
-      // Se estamos vendo ciclos, voltar para dashboard
       setSelectedTeam(null);
       setCycles([]);
       setCyclesError(null);
+    } else if (showTeamsList) {
+      setShowTeamsList(false);
     }
   };
 
   return (
     <div className="app">
-      <Header onMenuClick={toggleSidebar} />
+      <Header onMenuClick={toggleSidebar} onLogout={handleLogout} />
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onTeamSelect={handleTeamSelect}
+        showTeamsList={showTeamsList}
+        onActiveTeamsClick={handleShowTeamsList}
       />
 
       <main className="main-content">
-        {!selectedTeam ? (
+        {!selectedTeam && !showTeamsList ? (
           <>
             <div className="welcome-section">
               <h2>Bem-vindo ao Dashboard</h2>
@@ -727,26 +884,179 @@ function App() {
             </div>
 
             <div className="dashboard-cards">
-              <div className="card">
-                <h3>Times Ativos</h3>
-                <p>Gerencie seus times e projetos</p>
+              <div className="card teams-card">
+                <div className="card-header">
+                  <h3>Times Ativos</h3>
+                </div>
+                <div className="card-content">
+                  <p>Visualização dos times disponíveis</p>
+                  <div className="teams-chart-container">
+                    {teamsLoading ? (
+                      <div className="chart-loading">
+                        <div className="loading-spinner">⏳</div>
+                        <span>Carregando dados...</span>
+                      </div>
+                    ) : teamsError ? (
+                      <div className="chart-error">
+                        <span>❌ Erro ao carregar dados</span>
+                      </div>
+                    ) : (
+                      <div className="teams-chart">
+                        <div className="chart-pie">
+                          <div className="pie-chart" title="Times Ativos">
+                            <div className="pie-center">
+                              <span className="pie-number">{teams.length}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="card-footer">
+                  <button
+                    className="view-teams-btn centered-btn"
+                    onClick={handleShowTeamsList}
+                  >
+                    Gerenciar Times
+                  </button>
+                </div>
               </div>
 
-              <div className="card">
-                <h3>Projetos</h3>
-                <p>Acompanhe o progresso dos projetos</p>
+              <div className="card metrics-card">
+                <div className="card-header">
+                  <h3>📊 Métricas de Entregas</h3>
+                </div>
+                <div className="card-content">
+                  <p>Times com mais entregas no mês</p>
+                  <div className="metrics-chart-container">
+                    <div className="chart-loading">
+                      <div className="loading-spinner">⏳</div>
+                      <span>Em desenvolvimento...</span>
+                    </div>
+                  </div>
+                  <button
+                    className="view-metrics-btn"
+                    disabled
+                  >
+                    Ver Métricas
+                  </button>
+                </div>
               </div>
 
-              <div className="card">
-                <h3>Relatórios</h3>
-                <p>Visualize métricas e estatísticas</p>
+              <div className="card quality-card">
+                <div className="card-header">
+                  <h3>🐛 Métricas de Qualidade</h3>
+                </div>
+                <div className="card-content">
+                  <p>Times com mais/menos bugs</p>
+                  <div className="quality-chart-container">
+                    <div className="chart-loading">
+                      <div className="loading-spinner">⏳</div>
+                      <span>Em desenvolvimento...</span>
+                    </div>
+                  </div>
+                  <button
+                    className="view-quality-btn"
+                    disabled
+                  >
+                    Ver Qualidade
+                  </button>
+                </div>
               </div>
+
+              <div className="card developer-card">
+                <div className="card-header">
+                  <h3>🏆 Desenvolvedor do Mês</h3>
+                </div>
+                <div className="card-content">
+                  <p>O dev que mais entregou tarefas no mês</p>
+                  <div className="developer-chart-container">
+                    <div className="chart-loading">
+                      <div className="loading-spinner">⏳</div>
+                      <span>Em desenvolvimento...</span>
+                    </div>
+                  </div>
+                  <button
+                    className="view-developer-btn"
+                    disabled
+                  >
+                    Ver Ranking
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : showTeamsList ? (
+          <>
+            <div className="page-header">
+              <button className="back-button" onClick={handleBackToPrevious}>
+                ← Voltar
+              </button>
+              <h2>Lista de Times</h2>
+            </div>
+
+            <div className="teams-grid">
+              {teamsLoading ? (
+                <div className="loading-state">
+                  <div className="spinner"></div>
+                  <p>Carregando times...</p>
+                </div>
+              ) : teamsError ? (
+                <div className="error-state">
+                  <p>Erro: {teamsError}</p>
+                  <button onClick={fetchTeams} className="retry-button">
+                    Tentar novamente
+                  </button>
+                </div>
+              ) : teams.length === 0 ? (
+                <div className="empty-state">
+                  <p>Nenhum time encontrado</p>
+                </div>
+              ) : (
+                teams.map((team) => (
+                  <div key={team.id} className="team-card" onClick={() => handleTeamSelect(team)}>
+                    <div className="team-card-header">
+                      <div className="team-icon">
+                        {team.logo_props && team.logo_props.emoji && team.logo_props.emoji.url ? (
+                          <img
+                            src={team.logo_props.emoji.url}
+                            alt={team.name}
+                            className="team-icon-img"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'block';
+                            }}
+                          />
+                        ) : (
+                          <span className="team-icon-fallback">👥</span>
+                        )}
+                      </div>
+                      <h3 className="team-name">{team.name}</h3>
+                    </div>
+                    {team.description && (
+                      <div className="team-card-content">
+                        <p className="team-description">{team.description}</p>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </>
         ) : !selectedCycle ? (
           <div className="team-details">
             <div className="team-header">
-              <h2>{selectedTeam.name}</h2>
+              <h2>
+                {selectedTeam.name}
+                {(selectedTeam.name.toLowerCase().includes('transferência') ||
+                  selectedTeam.name.toLowerCase().includes('pagamento') ||
+                  selectedTeam.name.toLowerCase().includes('pix')) &&
+                  <span style={{ marginLeft: '12px', fontSize: '0.8em', color: '#FFD700' }}>
+                    👑 💰
+                  </span>
+                }
+              </h2>
               {selectedTeam.description && (
                 <p className="team-description">{selectedTeam.description}</p>
               )}
@@ -868,93 +1178,127 @@ function App() {
             </div>
 
             <div className="status-counts-section">
-              <h4>Total de tarefas por status:</h4>
-              <div className="status-counts-grid">
-                {Object.entries(getTaskCountsByStatus()).map(([status, count]) => (
-                  <div key={status} className="status-count-item">
-                    <span className="status-name">{status}:</span>
-                    <span className="status-count">{count}</span>
-                  </div>
-                ))}
+              <div
+                className="section-header clickable"
+                onClick={() => setStatusCountsExpanded(!statusCountsExpanded)}
+              >
+                <h4>📊 Total de tarefas por status</h4>
+                <span className={`expand-icon ${statusCountsExpanded ? 'expanded' : 'collapsed'}`}>
+                  {statusCountsExpanded ? '▼' : '▶'}
+                </span>
               </div>
+              {statusCountsExpanded && (
+                <div className="status-counts-grid">
+                  {Object.entries(getTaskCountsByStatus()).map(([status, count]) => (
+                    <div key={status} className="status-count-item">
+                      <span className="status-name">{status}:</span>
+                      <span className="status-count">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
+            <TaskAssigneeRanking
+              tasks={filteredTasks}
+              members={members}
+              states={states}
+              estimates={estimates}
+              getEstimateValue={getEstimateValue}
+              isExpanded={rankingExpanded}
+              onToggleExpand={() => setRankingExpanded(!rankingExpanded)}
+            />
+
             <div className="tasks-section">
-              {tasksLoading && (
-                <div className="loading-tasks">
-                  <div className="spinner"></div>
-                  <p>Carregando tarefas...</p>
-                </div>
-              )}
+              <div
+                className="section-header clickable"
+                onClick={() => setTasksExpanded(!tasksExpanded)}
+              >
+                <h4>📋 Lista de Tarefas ({filteredTasks.length})</h4>
+                <span className={`expand-icon ${tasksExpanded ? 'expanded' : 'collapsed'}`}>
+                  {tasksExpanded ? '▼' : '▶'}
+                </span>
+              </div>
 
-              {tasksError && (
-                <div className="error-tasks">
-                  <p>Erro: {tasksError}</p>
-                  <button
-                    onClick={() => handleCycleClick(selectedCycle)}
-                    className="retry-button"
-                  >
-                    Tentar novamente
-                  </button>
-                </div>
-              )}
-
-              {!tasksLoading && !tasksError && (
-                <div className="tasks-grid">
-                  {filteredTasks.length === 0 ? (
-                    <div className="empty-tasks">
-                      <p>{(selectedAssignee || selectedStatus) ? 'Nenhuma tarefa encontrada para os filtros selecionados' : 'Nenhuma tarefa encontrada para este ciclo'}</p>
+              {tasksExpanded && (
+                <>
+                  {tasksLoading && (
+                    <div className="loading-tasks">
+                      <div className="spinner"></div>
+                      <p>Carregando tarefas...</p>
                     </div>
-                  ) : (
-                    filteredTasks.map((task) => (
-                      <div key={task.id} className="task-card" onClick={() => console.log('Tarefa clicada:', task)}>
-                        <div className="task-header">
-                          <h4 className="task-name">{task.name}</h4>
-                          <span
-                            className="task-priority"
-                            style={{
-                              backgroundColor: getPriorityColor(task.priority),
-                              color: 'white'
-                            }}
-                          >
-                            {getPriorityText(task.priority)}
-                          </span>
-                        </div>
-
-                        <div className="task-info">
-                          <div className="task-info-item">
-                            <strong>Estado:</strong> {getStateName(task.state_id)}
-                          </div>
-
-                          <div className="task-info-item">
-                            <strong>Estimativa:</strong> {getEstimateValue(task.estimate_point)} pontos
-                          </div>
-
-                          <div className="task-info-item">
-                            <strong>Responsável:</strong> {getAssigneeName(task.assignee_ids)}
-                          </div>
-
-                          <div className="task-info-item">
-                            <strong>Projeto:</strong> {getLabelNames(task.label_ids)}
-                          </div>
-                        </div>
-
-                        {task.description && (
-                          <p className="task-description">{task.description}</p>
-                        )}
-
-                        <div className="task-dates">
-                          {task.created_at && (
-                            <small>Criado: {new Date(task.created_at).toLocaleDateString('pt-BR')}</small>
-                          )}
-                          {task.updated_at && (
-                            <small>Atualizado: {new Date(task.updated_at).toLocaleDateString('pt-BR')}</small>
-                          )}
-                        </div>
-                      </div>
-                    ))
                   )}
-                </div>
+
+                  {tasksError && (
+                    <div className="error-tasks">
+                      <p>Erro: {tasksError}</p>
+                      <button
+                        onClick={() => handleCycleClick(selectedCycle)}
+                        className="retry-button"
+                      >
+                        Tentar novamente
+                      </button>
+                    </div>
+                  )}
+
+                  {!tasksLoading && !tasksError && (
+                    <div className="tasks-grid">
+                      {filteredTasks.length === 0 ? (
+                        <div className="empty-tasks">
+                          <p>{(selectedAssignee || selectedStatus) ? 'Nenhuma tarefa encontrada para os filtros selecionados' : 'Nenhuma tarefa encontrada para este ciclo'}</p>
+                        </div>
+                      ) : (
+                        filteredTasks.map((task) => (
+                          <div key={task.id} className="task-card" onClick={() => console.log('Tarefa clicada:', task)}>
+                            <div className="task-header">
+                              <h4 className="task-name">{task.name}</h4>
+                              <span
+                                className="task-priority"
+                                style={{
+                                  backgroundColor: getPriorityColor(task.priority),
+                                  color: 'white'
+                                }}
+                              >
+                                {getPriorityIcon(task.priority)} {getPriorityText(task.priority)}
+                              </span>
+                            </div>
+
+                            <div className="task-info">
+                              <div className="task-info-item">
+                                <strong>Estado:</strong> {getStateName(task.state_id)}
+                              </div>
+
+                              <div className="task-info-item">
+                                <strong>Estimativa:</strong> {getEstimateValue(task.estimate_point)} pontos
+                              </div>
+
+                              <div className="task-info-item">
+                                <strong>Responsável:</strong> {getAssigneeName(task.assignee_ids)}
+                              </div>
+
+                              <div className="task-info-item">
+                                <strong>Projeto:</strong> {getLabelNames(task.label_ids)}
+                              </div>
+                            </div>
+
+                            {task.description && (
+                              <p className="task-description">{task.description}</p>
+                            )}
+
+                            <div className="task-dates">
+                              {task.created_at && (
+                                <small>Criado: {new Date(task.created_at).toLocaleDateString('pt-BR')}</small>
+                              )}
+                              {task.updated_at && (
+                                <small>Atualizado: {new Date(task.updated_at).toLocaleDateString('pt-BR')}</small>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
