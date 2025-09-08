@@ -9,9 +9,11 @@ const TaskAssigneeRanking = ({ tasks, members, states, estimates, getEstimateVal
     // Nomes dos status de conclusão (conforme solicitado pelo usuário)
     const completedStatusNames = [
       'pronto para publicação',
+      'to deploy',
       'concluído', 
       'done',
       'deployed',
+      'em produção',
       'Concluído ✅',
       'Pronto Para Publicação 👍'
     ];

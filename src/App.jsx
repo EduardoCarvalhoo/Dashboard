@@ -338,9 +338,13 @@ function App() {
     // Traduzir nomes de estados específicos
     switch (state.name.toLowerCase()) {
       case 'deployed':
-        return 'Implantado';
+        return 'Em produção';
       case 'done':
-        return 'Concluído';
+        return 'Em produção';
+      case 'concluído':
+        return 'Em produção';
+      case 'concluído ✅':
+        return 'Em produção';
       case 'in progress':
         return 'Em progresso';
       case 'todo':
@@ -357,7 +361,19 @@ function App() {
         return 'Revisado';
       case 'under review':
         return 'Em revisão';
+      case 'to deploy':
+        return 'Pronto para publicação';
+      case 'pronto para publicação 👍':
+        return 'Pronto para publicação';
       default:
+        // Verificar se o nome contém "concluído" ou "pronto para publicação" (case insensitive)
+        const lowerName = state.name.toLowerCase();
+        if (lowerName.includes('concluído')) {
+          return 'Em produção';
+        }
+        if (lowerName.includes('pronto para publicação')) {
+          return 'Pronto para publicação';
+        }
         return state.name;
     }
   };
@@ -499,22 +515,32 @@ function App() {
     const history = await checkTaskHistory(task.id);
     if (!history) return false;
 
-    // IDs dos status de conclusão
-    const completedStatusIds = [
-      '4fcf92c4-262e-4fea-a26b-051c487638b6', // pronto para publicação
-      '6988f447-ef33-40df-9292-3a0ca332566c'  // concluído
-    ];
+    // Função para verificar se um status é de conclusão
+  const isCompletedStatus = (stateId) => {
+    const state = states.find(s => s.id === stateId);
+    if (!state) return false;
+    
+    const stateName = state.name.toLowerCase();
+    return stateName.includes('concluído') || 
+           stateName.includes('done') || 
+           stateName.includes('deployed') || 
+           stateName.includes('pronto para publicação') || 
+           stateName.includes('to deploy') ||
+           stateName === 'deployed' ||
+           stateName === 'done';
+  };
 
     // Verificar se houve mudança para status de conclusão no período
     for (const historyItem of history) {
-      if (historyItem.new_identifier && completedStatusIds.includes(historyItem.new_identifier)) {
+      if (historyItem.new_identifier && isCompletedStatus(historyItem.new_identifier)) {
+        // Converter a data UTC do endpoint para data local
         const createdAt = new Date(historyItem.created_at);
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        
+        // Criar datas de início e fim em UTC para comparação correta
+        const start = new Date(startDate + 'T00:00:00.000Z');
+        const end = new Date(endDate + 'T23:59:59.999Z');
 
-        // Ajustar o fim do dia para incluir todo o dia final
-        end.setHours(23, 59, 59, 999);
-
+        // Comparar diretamente as datas UTC
         if (createdAt >= start && createdAt <= end) {
           return true;
         }
@@ -541,16 +567,21 @@ function App() {
 
     // Se há filtro de data, aplicar verificação de histórico
     if (reportStartDate && reportEndDate) {
-      // IDs dos status de conclusão
-      const completedStatusIds = [
-        '4fcf92c4-262e-4fea-a26b-051c487638b6', // pronto para publicação
-        '6988f447-ef33-40df-9292-3a0ca332566c'  // concluído
-      ];
+      // Função para verificar se um status é de conclusão
+      const isCompletedStatus = (stateId) => {
+        const state = states.find(s => s.id === stateId);
+        if (!state) return false;
+        
+        const stateName = state.name.toLowerCase();
+        return stateName.includes('concluído') || 
+               stateName.includes('done') || 
+               stateName.includes('deployed') || 
+               stateName.includes('pronto para publicação') || 
+               stateName.includes('to deploy');
+      };
 
       // Filtrar apenas tarefas que estão com status de conclusão
-      const completedTasks = filteredTasks.filter(task =>
-        completedStatusIds.includes(task.state_id)
-      );
+      const completedTasks = filteredTasks.filter(task => isCompletedStatus(task.state_id));
 
       if (completedTasks.length === 0) {
         alert('Nenhuma tarefa concluída ou pronta para publicação encontrada!');
@@ -671,7 +702,7 @@ function App() {
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Relatório de Tarefas DelTech</title>
+        <title>Relatório de Tarefas</title>
         <style>
           body {
             font-family: Arial, sans-serif;
@@ -691,6 +722,7 @@ function App() {
           .header h1 {
             margin: 0;
             font-size: 28px;
+            color: #1e3a8a;
           }
           .header p {
             margin: 10px 0 0 0;
@@ -766,38 +798,37 @@ function App() {
       </head>
       <body>
         <div class="header">
-          <h1>Relatório de Tarefas DelTech - ${selectedTeam?.name || 'Equipe'}</h1>
-          <p>Ciclo: ${selectedCycle?.name || 'Ciclo'}</p>
-          ${reportStartDate && reportEndDate ? `<p>Período: ${new Date(reportStartDate).toLocaleDateString('pt-BR')} a ${new Date(reportEndDate).toLocaleDateString('pt-BR')}</p>` : ''}
-          <p>Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+          <h1 style="color: #1e3a8a;">Relatório de Tarefas - ${selectedTeam?.name || 'Equipe'}</h1>
+          ${reportStartDate && reportEndDate ? `<p style="color: #000000;">Período: ${reportStartDate.split('-').reverse().join('/')} a ${reportEndDate.split('-').reverse().join('/')}</p>` : ''}
         </div>
         
         <div class="summary">
-          <h3>Resumo: ${tasksToExport.length} tarefas exportadas</h3>
-          ${reportStartDate && reportEndDate
-        ? `<p><strong>Filtro aplicado:</strong> Tarefas concluídas entre ${new Date(reportStartDate).toLocaleDateString('pt-BR')} e ${new Date(reportEndDate).toLocaleDateString('pt-BR')}</p>`
-        : `<p><strong>Status selecionados:</strong> ${reportStatusFilters.length > 0 ? reportStatusFilters.map(id => getStateName(id)).join(', ') : 'Todos'}</p>`
-      }
+          <h3 style="color: #1e3a8a;">Resumo: ${tasksToExport.length} tarefas</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
+            <div style="background: #f0f9ff; padding: 15px; border-radius: 6px; border-left: 4px solid #22c55e;">
+              <strong style="color: #1e3a8a;">Total em Produção:</strong> ${tasksToExport.filter(task => {
+                const state = states.find(s => s.id === task.state_id);
+                return state && (state.name.toLowerCase() === 'done' || state.name.toLowerCase() === 'deployed' || task.state_id === '6988f447-ef33-40df-9292-3a0ca332566c');
+              }).length} tarefas
+            </div>
+            <div style="background: #f0fdf4; padding: 15px; border-radius: 6px; border-left: 4px solid #0ea5e9;">
+              <strong style="color: #1e3a8a;">Total Pronto para Publicação:</strong> ${tasksToExport.filter(task => {
+                const state = states.find(s => s.id === task.state_id);
+                return state && (state.name.toLowerCase().includes('pronto para publicação') || state.name.toLowerCase() === 'to deploy' || task.state_id === '4fcf92c4-262e-4fea-a26b-051c487638b6');
+              }).length} tarefas
+            </div>
+          </div>
         </div>
         
         ${tasksToExport.map(task => `
           <div class="task-card">
             <div class="task-header">
-              <h4 class="task-name">${task.name}</h4>
-              <span class="task-priority" style="background-color: ${getPriorityColor(task.priority)}">
-                ${getPriorityIcon(task.priority)} ${getPriorityText(task.priority)}
-              </span>
+              <h4 class="task-name" style="color: #1e3a8a;">${task.name}</h4>
             </div>
             
             <div class="task-info">
               <div class="task-info-item">
                 <strong>Estado:</strong> ${getStateName(task.state_id)}
-              </div>
-              <div class="task-info-item">
-                <strong>Estimativa:</strong> ${getEstimateValue(task.estimate_point)} pontos
-              </div>
-              <div class="task-info-item">
-                <strong>Responsável:</strong> ${getAssigneeName(task.assignee_ids)}
               </div>
               <div class="task-info-item">
                 <strong>Projeto:</strong> ${getLabelNames(task.label_ids)}
@@ -809,11 +840,6 @@ function App() {
                 ${task.description}
               </div>
             ` : ''}
-            
-            <div class="task-dates">
-              ${task.created_at ? `Criado: ${new Date(task.created_at).toLocaleDateString('pt-BR')}` : ''}
-              ${task.updated_at ? ` | Atualizado: ${new Date(task.updated_at).toLocaleDateString('pt-BR')}` : ''}
-            </div>
           </div>
         `).join('')}
       </body>
@@ -1390,7 +1416,7 @@ function App() {
                   </div>
                 ) : (
                   <div className="date-filter-info">
-                    <p><strong>ℹ️ Filtro por data ativo:</strong> Serão exportadas apenas as tarefas que foram concluídas ou marcadas como "Pronto para Publicação" entre {new Date(reportStartDate).toLocaleDateString('pt-BR')} e {new Date(reportEndDate).toLocaleDateString('pt-BR')}.</p>
+                    <p><strong>ℹ️ Filtro por data ativo:</strong> Serão exportadas apenas as tarefas que foram concluídas ou marcadas como "Pronto para Publicação" entre {reportStartDate.split('-').reverse().join('/')} e {reportEndDate.split('-').reverse().join('/')}.</p>
                   </div>
                 )}
 
