@@ -3,7 +3,6 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import TaskAssigneeRanking from './components/TaskAssigneeRanking';
 import { useTeams } from './hooks/useTeams';
-import AuthFlow from './components/AuthFlow';
 import authService from './services/authService';
 import './App.css';
 
@@ -46,14 +45,32 @@ function App() {
   const [rankingExpanded, setRankingExpanded] = useState(true);
   const [tasksExpanded, setTasksExpanded] = useState(true);
 
+  // Estados para relatório de ciclos
+  const [showCycleReportModal, setShowCycleReportModal] = useState(false);
+  const [cycleReportStartDate, setCycleReportStartDate] = useState('');
+  const [cycleReportEndDate, setCycleReportEndDate] = useState('');
+  const [cycleReportStatusFilters, setCycleReportStatusFilters] = useState([]);
+  const [allProjectTasks, setAllProjectTasks] = useState([]);
+  const [allProjectTasksLoading, setAllProjectTasksLoading] = useState(false);
+
+  // Novos estados para o modal de edição de PDF
+  const [showPdfEditorModal, setShowPdfEditorModal] = useState(false);
+  const [pdfCategories, setPdfCategories] = useState([]);
+  const [filteredTasksForPdf, setFilteredTasksForPdf] = useState([]);
+  const [uncategorizedTasks, setUncategorizedTasks] = useState([]);
+
   useEffect(() => {
     const checkAuth = () => {
-      authService.loadTokensFromStorage();
-      const authenticated = authService.isAuthenticated();
-      setIsAuthenticated(authenticated);
-      if (authenticated) {
-        setAuthTokens(authService.getTokens());
-      }
+      // Temporariamente desabilitado - login com email e senha
+      // authService.loadTokensFromStorage();
+      // const authenticated = authService.isAuthenticated();
+      // setIsAuthenticated(authenticated);
+      // if (authenticated) {
+      //   setAuthTokens(authService.getTokens());
+      // }
+      
+      // Definir como autenticado temporariamente
+      setIsAuthenticated(true);
       setAuthLoading(false);
     };
 
@@ -96,9 +113,10 @@ function App() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <AuthFlow onAuthSuccess={handleAuthSuccess} />;
-  }
+  // Temporariamente desabilitado - login com email e senha
+  // if (!isAuthenticated) {
+  //   return <AuthFlow onAuthSuccess={handleAuthSuccess} />;
+  // }
 
   // Função para buscar dados auxiliares
   const fetchAuxiliaryData = async () => {
@@ -197,6 +215,9 @@ function App() {
     if (states.length === 0) {
       await fetchAuxiliaryData();
     }
+
+    // Buscar todas as tarefas do projeto quando ele for selecionado
+    await fetchAllProjectTasks(team.id);
 
     try {
       const response = await fetch(`/api/workspaces/del-tech/projects/${team.id}/cycles/`, {
@@ -486,6 +507,51 @@ function App() {
     });
   };
 
+  const getUniqueStatusesFromProject = () => {
+    const statusIds = new Set();
+    allProjectTasks.forEach(task => {
+      if (task.state_id) {
+        statusIds.add(task.state_id);
+      }
+    });
+
+    return Array.from(statusIds).map(id => {
+      const state = states.find(s => s.id === id);
+      return state ? { id, name: state.name } : { id, name: 'Estado não encontrado' };
+    });
+  };
+
+  // Função para buscar todas as tarefas do projeto (independente de sprint)
+  const fetchAllProjectTasks = async (projectId) => {
+    setAllProjectTasksLoading(true);
+    try {
+      const response = await fetch(`/api/workspaces/del-tech/projects/${projectId}/issues`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorMessage = getErrorMessage({ message: response.statusText }, response.status);
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      const tasksList = data.results || data || [];
+      setAllProjectTasks(tasksList);
+      return tasksList;
+    } catch (err) {
+      const friendlyError = getErrorMessage(err, null);
+      console.error('Erro ao buscar todas as tarefas do projeto:', err);
+      alert(`Erro ao carregar tarefas: ${friendlyError}`);
+      return [];
+    } finally {
+      setAllProjectTasksLoading(false);
+    }
+  };
+
   // Função para verificar histórico da tarefa
   const checkTaskHistory = async (taskId) => {
     try {
@@ -516,19 +582,19 @@ function App() {
     if (!history) return false;
 
     // Função para verificar se um status é de conclusão
-  const isCompletedStatus = (stateId) => {
-    const state = states.find(s => s.id === stateId);
-    if (!state) return false;
-    
-    const stateName = state.name.toLowerCase();
-    return stateName.includes('concluído') || 
-           stateName.includes('done') || 
-           stateName.includes('deployed') || 
-           stateName.includes('pronto para publicação') || 
-           stateName.includes('to deploy') ||
-           stateName === 'deployed' ||
-           stateName === 'done';
-  };
+    const isCompletedStatus = (stateId) => {
+      const state = states.find(s => s.id === stateId);
+      if (!state) return false;
+      
+      const stateName = state.name.toLowerCase();
+      return stateName.includes('concluído') || 
+             stateName.includes('done') || 
+             stateName.includes('deployed') || 
+             stateName.includes('pronto para publicação') || 
+             stateName.includes('to deploy') ||
+             stateName === 'deployed' ||
+             stateName === 'done';
+    };
 
     // Verificar se houve mudança para status de conclusão no período
     for (const historyItem of history) {
@@ -550,9 +616,605 @@ function App() {
     return false;
   };
 
+  // Função para abrir o modal de edição de PDF
+  const openPdfEditor = async () => {
+    let tasksToEdit;
+
+    // Aplicar os mesmos filtros do modal de exportação
+    let filteredTasks = cycleReportStatusFilters.length > 0
+      ? allProjectTasks.filter(task => cycleReportStatusFilters.includes(task.state_id))
+      : allProjectTasks;
+
+    if (cycleReportStartDate && cycleReportEndDate) {
+      const isCompletedStatus = (stateId) => {
+        const state = states.find(s => s.id === stateId);
+        if (!state) return false;
+        
+        const stateName = state.name.toLowerCase();
+        return stateName.includes('concluído') || 
+               stateName.includes('done') || 
+               stateName.includes('deployed') || 
+               stateName.includes('pronto para publicação') || 
+               stateName.includes('to deploy');
+      };
+
+      const tasksInPeriod = [];
+      const batchSize = 10;
+      
+      for (let i = 0; i < filteredTasks.length; i += batchSize) {
+        const batch = filteredTasks.slice(i, i + batchSize);
+        
+        for (const task of batch) {
+          const isCompleted = await isTaskCompletedInPeriod(
+            task, 
+            cycleReportStartDate, 
+            cycleReportEndDate
+          );
+          
+          if (isCompleted) {
+            tasksInPeriod.push(task);
+          }
+        }
+      }
+      
+      tasksToEdit = tasksInPeriod;
+    } else {
+      tasksToEdit = filteredTasks;
+    }
+
+    setFilteredTasksForPdf(tasksToEdit);
+    setUncategorizedTasks([...tasksToEdit]);
+    setPdfCategories([]);
+    
+    // Fechar o modal atual e abrir o editor
+    setShowCycleReportModal(false);
+    setShowPdfEditorModal(true);
+  };
+
+  // Função para adicionar nova categoria
+  const addCategory = (categoryName) => {
+    if (categoryName.trim() && !pdfCategories.find(cat => cat.name === categoryName.trim())) {
+      const newCategory = {
+        id: Date.now(),
+        name: categoryName.trim(),
+        tasks: []
+      };
+      setPdfCategories(prev => [...prev, newCategory]);
+    }
+  };
+
+  // Função para mover tarefa para categoria
+  const moveTaskToCategory = (taskId, categoryId) => {
+    console.log('Movendo tarefa:', taskId, 'para categoria:', categoryId);
+    const taskIdNum = parseInt(taskId);
+    const task = uncategorizedTasks.find(t => t.id === taskIdNum) || 
+                 pdfCategories.flatMap(cat => cat.tasks).find(t => t.id === taskIdNum);
+    
+    console.log('Tarefa encontrada:', task);
+    if (!task) {
+      console.log('Tarefa não encontrada!');
+      return;
+    }
+
+    // Remover tarefa de onde estava
+    setUncategorizedTasks(prev => {
+      const filtered = prev.filter(t => t.id !== taskIdNum);
+      console.log('Tarefas não categorizadas após remoção:', filtered.length);
+      return filtered;
+    });
+    
+    setPdfCategories(prev => {
+      const updated = prev.map(cat => ({
+        ...cat,
+        tasks: cat.tasks.filter(t => t.id !== taskIdNum)
+      }));
+      console.log('Categorias após remoção:', updated);
+      return updated;
+    });
+
+    // Adicionar à nova categoria ou não categorizadas
+    if (categoryId === 'uncategorized') {
+      setUncategorizedTasks(prev => {
+        const updated = [...prev, task];
+        console.log('Adicionando à não categorizadas:', updated.length);
+        return updated;
+      });
+    } else {
+      const categoryIdNum = parseInt(categoryId);
+      setPdfCategories(prev => {
+        const updated = prev.map(cat => 
+          cat.id === categoryIdNum 
+            ? { ...cat, tasks: [...cat.tasks, task] }
+            : cat
+        );
+        console.log('Adicionando à categoria:', categoryIdNum, updated);
+        return updated;
+      });
+    }
+  };
+
+  // Função para remover categoria
+  const removeCategory = (categoryId) => {
+    const category = pdfCategories.find(cat => cat.id === categoryId);
+    if (category) {
+      setUncategorizedTasks(prev => [...prev, ...category.tasks]);
+      setPdfCategories(prev => prev.filter(cat => cat.id !== categoryId));
+    }
+  };
+
+  // Função para gerar PDF organizado
+  const generateOrganizedPDF = () => {
+    const allTasks = [
+      ...uncategorizedTasks,
+      ...pdfCategories.flatMap(cat => cat.tasks)
+    ];
+
+    if (allTasks.length === 0) {
+      alert('Nenhuma tarefa selecionada para exportar.');
+      return;
+    }
+
+    // Criar HTML organizado por categorias
+    let htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Tarefas - ${selectedTeam?.name || 'Projeto'}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #1e3a8a; padding-bottom: 20px; }
+          .category { margin-bottom: 30px; }
+          .category-title { background: #1e3a8a; color: white; padding: 10px 15px; margin-bottom: 15px; font-size: 18px; font-weight: bold; }
+          .task { border: 1px solid #ddd; margin-bottom: 10px; padding: 15px; border-radius: 5px; }
+          .task-title { font-weight: bold; color: #1e3a8a; margin-bottom: 8px; }
+          .task-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; }
+          .task-description { margin-top: 10px; color: #666; }
+          .summary { background: #f0f9ff; padding: 15px; border-radius: 5px; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Relatório de Tarefas - ${selectedTeam?.name || 'Projeto'}</h1>
+          <p>Gerado em: ${new Date().toLocaleDateString('pt-BR')}</p>
+          ${cycleReportStartDate && cycleReportEndDate ? 
+            `<p>Período: ${cycleReportStartDate.split('-').reverse().join('/')} a ${cycleReportEndDate.split('-').reverse().join('/')}</p>` : 
+            ''}
+        </div>
+    `;
+
+    // Adicionar categorias
+    pdfCategories.forEach(category => {
+      if (category.tasks.length > 0) {
+        htmlContent += `
+          <div class="category">
+            <div class="category-title">${category.name}</div>
+        `;
+        
+        category.tasks.forEach(task => {
+          const state = states.find(s => s.id === task.state_id);
+          const assigneeName = getAssigneeName(task.assignee_ids);
+          
+          htmlContent += `
+            <div class="task">
+              <div class="task-title">${task.name}</div>
+              <div class="task-info">
+                <div><strong>Status:</strong> ${state?.name || 'N/A'}</div>
+                <div><strong>Responsável:</strong> ${assigneeName}</div>
+                <div><strong>Prioridade:</strong> ${task.priority || 'N/A'}</div>
+                <div><strong>Estimativa:</strong> ${getEstimateValue(task.estimate_point) || 'N/A'}</div>
+              </div>
+              ${task.description ? `<div class="task-description">${task.description}</div>` : ''}
+            </div>
+          `;
+        });
+        
+        htmlContent += `</div>`;
+      }
+    });
+
+    // Adicionar tarefas não categorizadas
+    if (uncategorizedTasks.length > 0) {
+      htmlContent += `
+        <div class="category">
+          <div class="category-title">Outras Tarefas</div>
+      `;
+      
+      uncategorizedTasks.forEach(task => {
+        const state = states.find(s => s.id === task.state_id);
+        const assigneeName = getAssigneeName(task.assignee_ids);
+        
+        htmlContent += `
+          <div class="task">
+            <div class="task-title">${task.name}</div>
+            <div class="task-info">
+              <div><strong>Status:</strong> ${state?.name || 'N/A'}</div>
+              <div><strong>Responsável:</strong> ${assigneeName}</div>
+              <div><strong>Prioridade:</strong> ${task.priority || 'N/A'}</div>
+              <div><strong>Estimativa:</strong> ${getEstimateValue(task.estimate_point) || 'N/A'}</div>
+            </div>
+            ${task.description ? `<div class="task-description">${task.description}</div>` : ''}
+          </div>
+        `;
+      });
+      
+      htmlContent += `</div>`;
+    }
+
+    // Adicionar resumo
+    htmlContent += `
+        <div class="summary">
+          <h3>Resumo</h3>
+          <p><strong>Total de tarefas:</strong> ${allTasks.length}</p>
+          <p><strong>Categorias criadas:</strong> ${pdfCategories.length}</p>
+          <p><strong>Tarefas categorizadas:</strong> ${pdfCategories.reduce((sum, cat) => sum + cat.tasks.length, 0)}</p>
+          <p><strong>Tarefas não categorizadas:</strong> ${uncategorizedTasks.length}</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Criar e baixar o PDF
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    } else {
+      alert('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-ups está desabilitado.');
+    }
+
+    setShowPdfEditorModal(false);
+    setShowCycleReportModal(false);
+  };
+
+  // Função para gerar PDF com filtro de data para ciclos
+  const generateCyclePDF = async () => {
+    let tasksToExport;
+
+    // Primeiro aplicar filtro de status se selecionado
+    let filteredTasks = cycleReportStatusFilters.length > 0
+      ? allProjectTasks.filter(task => cycleReportStatusFilters.includes(task.state_id))
+      : allProjectTasks;
+
+    // Se há filtro de data, aplicar verificação de histórico nas tarefas já filtradas por status
+    if (cycleReportStartDate && cycleReportEndDate) {
+      // Função para verificar se um status é de conclusão
+      const isCompletedStatus = (stateId) => {
+        const state = states.find(s => s.id === stateId);
+        if (!state) return false;
+        
+        const stateName = state.name.toLowerCase();
+        return stateName.includes('concluído') || 
+               stateName.includes('done') || 
+               stateName.includes('deployed') || 
+               stateName.includes('pronto para publicação') || 
+               stateName.includes('to deploy') ||
+               stateName === 'deployed' ||
+               stateName === 'done';
+      };
+
+      if (filteredTasks.length === 0) {
+        alert('Nenhuma tarefa encontrada com os status selecionados!');
+        return;
+      }
+
+      const tasksInPeriod = [];
+
+      // Mostrar loading melhorado
+      const loadingDiv = document.createElement('div');
+      loadingDiv.id = 'pdf-loading';
+      loadingDiv.innerHTML = `
+        <div style="
+          position: fixed; 
+          top: 0; 
+          left: 0; 
+          width: 100%; 
+          height: 100%; 
+          background: rgba(0,0,0,0.5); 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          z-index: 10000;
+        ">
+          <div style="
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2); 
+            text-align: center;
+            min-width: 300px;
+          ">
+            <div style="
+              width: 40px; 
+              height: 40px; 
+              border: 4px solid #e2e8f0; 
+              border-top: 4px solid #2563eb; 
+              border-radius: 50%; 
+              animation: spin 1s linear infinite; 
+              margin: 0 auto 20px;
+            "></div>
+            <p style="margin: 0; font-size: 16px; color: #374151;">Verificando histórico das tarefas filtradas...</p>
+            <p style="margin: 10px 0 0; font-size: 14px; color: #6b7280;" id="progress-text">0 de ${filteredTasks.length} tarefas verificadas</p>
+          </div>
+        </div>
+        <style>
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        </style>
+      `;
+      document.body.appendChild(loadingDiv);
+
+      try {
+        // Processar apenas as tarefas filtradas por status em lotes para melhor performance
+        const batchSize = 5;
+        let processedCount = 0;
+
+        for (let i = 0; i < filteredTasks.length; i += batchSize) {
+          const batch = filteredTasks.slice(i, i + batchSize);
+
+          // Processar lote em paralelo
+          const batchPromises = batch.map(async (task) => {
+            const isCompleted = await isTaskCompletedInPeriod(task, cycleReportStartDate, cycleReportEndDate);
+            return { task, isCompleted };
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+
+          // Adicionar tarefas concluídas no período ao resultado
+          batchResults.forEach(({ task, isCompleted }) => {
+            if (isCompleted) {
+              tasksInPeriod.push(task);
+            }
+          });
+
+          // Atualizar progresso
+          processedCount += batch.length;
+          const progressElement = document.getElementById('progress-text');
+          if (progressElement) {
+            progressElement.textContent = `${processedCount} de ${filteredTasks.length} tarefas verificadas`;
+          }
+
+          // Pequena pausa para não sobrecarregar a API
+          if (i + batchSize < filteredTasks.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+
+        tasksToExport = tasksInPeriod;
+      } catch (error) {
+        console.error('Erro ao verificar histórico das tarefas:', error);
+        alert('Erro ao verificar histórico das tarefas. Tente novamente.');
+        return;
+      } finally {
+        // Remover loading
+        const loadingElement = document.getElementById('pdf-loading');
+        if (loadingElement) {
+          document.body.removeChild(loadingElement);
+        }
+      }
+    } else {
+      // Sem filtro de data, usar apenas filtro de status
+      tasksToExport = filteredTasks;
+    }
+
+    if (tasksToExport.length === 0) {
+      alert('Nenhuma tarefa encontrada para exportar com os filtros aplicados!');
+      return;
+    }
+
+    // Função para verificar se um status é de conclusão (para contagem no PDF)
+  const isCompletedStatus = (stateId) => {
+    const state = states.find(s => s.id === stateId);
+    if (!state) return false;
+    
+    const stateName = state.name.toLowerCase();
+    return stateName.includes('concluído') || 
+           stateName.includes('done') || 
+           stateName.includes('deployed') || 
+           stateName.includes('pronto para publicação') || 
+           stateName.includes('to deploy') ||
+           stateName === 'deployed' ||
+           stateName === 'done';
+  };
+
+  // Função específica para verificar se está em produção (excluindo "pronto para publicação")
+  const isInProduction = (stateId) => {
+    const state = states.find(s => s.id === stateId);
+    if (!state) return false;
+    
+    const stateName = state.name.toLowerCase();
+    return stateName.includes('concluído') || 
+           stateName.includes('done') || 
+           stateName.includes('deployed') || 
+           stateName === 'deployed' ||
+           stateName === 'done';
+  };
+
+  // Função para verificar se está pronto para publicação
+  const isReadyForRelease = (stateId) => {
+    const state = states.find(s => s.id === stateId);
+    if (!state) return false;
+    
+    const stateName = state.name.toLowerCase();
+    return stateName.includes('pronto para publicação') || 
+           stateName.includes('to deploy') ||
+           stateName === 'to deploy';
+  };
+
+    // Criar conteúdo HTML para o PDF
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Tarefas - Ciclos</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: white;
+            color: #333;
+          }
+          .header {
+            background: #1e3a8a;
+            color: white;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 8px;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 28px;
+            color: #1e3a8a;
+          }
+          .header p {
+            margin: 10px 0 0;
+            font-size: 16px;
+          }
+          .summary {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid #1e3a8a;
+          }
+          .task-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .task-header {
+            border-bottom: 1px solid #f1f5f9;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+          }
+          .task-name {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e3a8a;
+          }
+          .task-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 15px;
+          }
+          .task-info-item {
+            font-size: 14px;
+            color: #4b5563;
+          }
+          .task-info-item strong {
+            color: #1e3a8a;
+          }
+          .task-description {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #1e3a8a;
+            margin-bottom: 10px;
+            font-style: italic;
+          }
+          .task-dates {
+            font-size: 12px;
+            color: #666;
+            text-align: right;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 style="color: #1e3a8a;">Relatório de Tarefas - ${selectedTeam?.name || 'Equipe'} (Todos os Ciclos)</h1>
+          ${cycleReportStartDate && cycleReportEndDate ? `<p style="color: #000000;">Período: ${cycleReportStartDate.split('-').reverse().join('/')} a ${cycleReportEndDate.split('-').reverse().join('/')}</p>` : ''}
+        </div>
+        
+        <div class="summary">
+          <h3 style="color: #1e3a8a;">Resumo: ${tasksToExport.length} tarefas</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
+            <div style="background: #f0f9ff; padding: 15px; border-radius: 6px; border-left: 4px solid #22c55e;">
+              <strong style="color: #1e3a8a;">Total em Produção:</strong> ${tasksToExport.filter(task => {
+                return isInProduction(task.state_id);
+              }).length} tarefas
+            </div>
+            <div style="background: #f0fdf4; padding: 15px; border-radius: 6px; border-left: 4px solid #0ea5e9;">
+              <strong style="color: #1e3a8a;">Total Pronto para Publicação:</strong> ${tasksToExport.filter(task => {
+                return isReadyForRelease(task.state_id);
+              }).length} tarefas
+            </div>
+          </div>
+        </div>
+        
+        ${tasksToExport.map(task => `
+          <div class="task-card">
+            <div class="task-header">
+              <h4 class="task-name" style="color: #1e3a8a;">${task.name}</h4>
+            </div>
+            
+            <div class="task-info">
+              <div class="task-info-item">
+                <strong>Estado:</strong> ${getStateName(task.state_id)}
+              </div>
+              <div class="task-info-item">
+                <strong>Projeto:</strong> ${getLabelNames(task.label_ids)}
+              </div>
+            </div>
+            
+            ${task.description ? `
+              <div class="task-description">
+                ${task.description}
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
+      </body>
+      </html>
+    `;
+
+    // Criar e baixar o PDF
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    } else {
+      alert('Não foi possível abrir a janela de impressão. Verifique se o bloqueador de pop-ups está desabilitado.');
+    }
+
+    setShowCycleReportModal(false);
+  };
+
   // Função para gerenciar seleção de status no modal de relatório
   const handleReportStatusChange = (statusId) => {
     setReportStatusFilters(prev => {
+      if (prev.includes(statusId)) {
+        return prev.filter(id => id !== statusId);
+      } else {
+        return [...prev, statusId];
+      }
+    });
+  };
+
+  // Função para gerenciar seleção de status no modal de relatório de ciclos
+  const handleCycleReportStatusChange = (statusId) => {
+    setCycleReportStatusFilters(prev => {
       if (prev.includes(statusId)) {
         return prev.filter(id => id !== statusId);
       } else {
@@ -807,14 +1469,12 @@ function App() {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
             <div style="background: #f0f9ff; padding: 15px; border-radius: 6px; border-left: 4px solid #22c55e;">
               <strong style="color: #1e3a8a;">Total em Produção:</strong> ${tasksToExport.filter(task => {
-                const state = states.find(s => s.id === task.state_id);
-                return state && (state.name.toLowerCase() === 'done' || state.name.toLowerCase() === 'deployed' || task.state_id === '6988f447-ef33-40df-9292-3a0ca332566c');
+                return isInProduction(task.state_id);
               }).length} tarefas
             </div>
             <div style="background: #f0fdf4; padding: 15px; border-radius: 6px; border-left: 4px solid #0ea5e9;">
               <strong style="color: #1e3a8a;">Total Pronto para Publicação:</strong> ${tasksToExport.filter(task => {
-                const state = states.find(s => s.id === task.state_id);
-                return state && (state.name.toLowerCase().includes('pronto para publicação') || state.name.toLowerCase() === 'to deploy' || task.state_id === '4fcf92c4-262e-4fea-a26b-051c487638b6');
+                return isReadyForRelease(task.state_id);
               }).length} tarefas
             </div>
           </div>
@@ -1089,7 +1749,16 @@ function App() {
             </div>
 
             <div className="cycles-section">
-              <h3>Ciclos do Projeto</h3>
+              <div className="cycles-header-with-export">
+                <h3>Ciclos do Projeto</h3>
+                <button
+                  className="export-report-btn"
+                  onClick={() => setShowCycleReportModal(true)}
+                  disabled={allProjectTasksLoading}
+                >
+                  {allProjectTasksLoading ? '⏳ Carregando...' : '📊 Exportar Relatório'}
+                </button>
+              </div>
 
               {cyclesLoading && (
                 <div className="loading-cycles">
@@ -1449,6 +2118,337 @@ function App() {
                     className="btn-primary"
                     onClick={generatePDF}
                     disabled={!reportStartDate && !reportEndDate && reportStatusFilters.length === 0 && filteredTasks.length === 0}
+                  >
+                    📄 Gerar PDF
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Edição de PDF */}
+        {showPdfEditorModal && (
+          <div className="modal-overlay">
+            <div className="modal-content pdf-editor-modal-large">
+              <div className="modal-header">
+                <h3>Editar PDF - Organizar Tarefas</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => {
+                    setShowPdfEditorModal(false);
+                    setPdfCategories([]);
+                    setUncategorizedTasks([]);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="modal-body pdf-editor-body-large">
+                <div className="category-creator">
+                  <input
+                    type="text"
+                    placeholder="Nome da categoria (ex: Nova Funcionalidade, Correção de Bug)"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        addCategory(e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="category-input"
+                  />
+                  <button
+                    onClick={(e) => {
+                      const input = e.target.previousElementSibling;
+                      addCategory(input.value);
+                      input.value = '';
+                    }}
+                    className="add-category-btn"
+                  >
+                    ➕ Adicionar Categoria
+                  </button>
+                </div>
+
+                <div className="pdf-editor-content">
+                  {/* Categorias criadas */}
+                  {pdfCategories.map(category => (
+                    <div key={category.id} className="pdf-category">
+                      <div className="category-header">
+                        <h4>{category.name}</h4>
+                        <span className="task-count">({category.tasks.length} tarefas)</span>
+                        <button
+                          onClick={() => removeCategory(category.id)}
+                          className="remove-category-btn"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                      <div 
+                        className="category-drop-zone"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (!e.currentTarget.classList.contains('drag-over')) {
+                            e.currentTarget.classList.add('drag-over');
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          // Só remove o drag-over se realmente saiu da zona de drop
+                          if (!e.currentTarget.contains(e.relatedTarget)) {
+                            e.currentTarget.classList.remove('drag-over');
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.currentTarget.classList.remove('drag-over');
+                          const taskId = e.dataTransfer.getData('text/plain');
+                          console.log('Drop na categoria:', category.id, 'taskId:', taskId);
+                          moveTaskToCategory(taskId, category.id);
+                        }}
+                      >
+                        {category.tasks.length === 0 ? (
+                          <div className="empty-category">Arraste tarefas aqui</div>
+                        ) : (
+                          category.tasks.map(task => (
+                            <div
+                              key={task.id}
+                              className="pdf-task-item"
+                              draggable={true}
+                              onDragStart={(e) => {
+                                console.log('Drag start - taskId:', task.id);
+                                e.dataTransfer.setData('text/plain', task.id.toString());
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.currentTarget.style.opacity = '0.5';
+                              }}
+                              onDragEnd={(e) => {
+                                console.log('Drag end');
+                                e.currentTarget.style.opacity = '1';
+                                // Limpar qualquer estado de drag
+                                document.querySelectorAll('.drag-over').forEach(el => {
+                                  el.classList.remove('drag-over');
+                                });
+                              }}
+                            >
+                              <div className="task-name">{task.name}</div>
+                              <div className="task-meta">
+                                <span className="task-status">{states.find(s => s.id === task.state_id)?.name}</span>
+                                <span className="task-assignee">{getAssigneeName(task.assignee_ids)}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Tarefas não categorizadas */}
+                  <div className="pdf-category">
+                    <div className="category-header">
+                      <h4>📝 Tarefas Não Categorizadas</h4>
+                      <span className="task-count">({uncategorizedTasks.length} tarefas)</span>
+                    </div>
+                    <div 
+                      className="category-drop-zone"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (!e.currentTarget.classList.contains('drag-over')) {
+                          e.currentTarget.classList.add('drag-over');
+                        }
+                      }}
+                      onDragLeave={(e) => {
+                        // Só remove o drag-over se realmente saiu da zona de drop
+                        if (!e.currentTarget.contains(e.relatedTarget)) {
+                          e.currentTarget.classList.remove('drag-over');
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.classList.remove('drag-over');
+                        const taskId = e.dataTransfer.getData('text/plain');
+                        console.log('Drop em não categorizadas, taskId:', taskId);
+                        moveTaskToCategory(taskId, 'uncategorized');
+                      }}
+                    >
+                      {uncategorizedTasks.length === 0 ? (
+                        <div className="empty-category">Todas as tarefas foram categorizadas</div>
+                      ) : (
+                        uncategorizedTasks.map(task => (
+                          <div
+                            key={task.id}
+                            className="pdf-task-item"
+                            draggable={true}
+                            onDragStart={(e) => {
+                              console.log('Drag start - taskId:', task.id);
+                              e.dataTransfer.setData('text/plain', task.id.toString());
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.currentTarget.style.opacity = '0.5';
+                            }}
+                            onDragEnd={(e) => {
+                              console.log('Drag end');
+                              e.currentTarget.style.opacity = '1';
+                              // Limpar qualquer estado de drag
+                              document.querySelectorAll('.drag-over').forEach(el => {
+                                el.classList.remove('drag-over');
+                              });
+                            }}
+                          >
+                            <div className="task-name">{task.name}</div>
+                            <div className="task-meta">
+                              <span className="task-status">{states.find(s => s.id === task.state_id)?.name}</span>
+                              <span className="task-assignee">{getAssigneeName(task.assignee_ids)}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => {
+                      setShowPdfEditorModal(false);
+                      setPdfCategories([]);
+                      setUncategorizedTasks([]);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={generateOrganizedPDF}
+                    disabled={filteredTasksForPdf.length === 0}
+                  >
+                    📄 Gerar PDF Organizado
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Relatório de Ciclos */}
+        {showCycleReportModal && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Exportar Relatório - Todos os Ciclos</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => {
+                    setShowCycleReportModal(false);
+                    setCycleReportStartDate('');
+                    setCycleReportEndDate('');
+                    setCycleReportStatusFilters([]);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <div className="date-filter-section">
+                  <h4>Filtro por Data de Conclusão</h4>
+                  <p>Selecione um período para filtrar tarefas que foram concluídas ou marcadas como "Pronto para Publicação" neste intervalo:</p>
+
+                  <div className="date-inputs">
+                    <div className="date-input-group">
+                      <label htmlFor="cycle-start-date">Data Inicial:</label>
+                      <input
+                        type="date"
+                        id="cycle-start-date"
+                        value={cycleReportStartDate}
+                        onChange={(e) => setCycleReportStartDate(e.target.value)}
+                        className="date-input"
+                      />
+                    </div>
+
+                    <div className="date-input-group">
+                      <label htmlFor="cycle-end-date">Data Final:</label>
+                      <input
+                        type="date"
+                        id="cycle-end-date"
+                        value={cycleReportEndDate}
+                        onChange={(e) => setCycleReportEndDate(e.target.value)}
+                        className="date-input"
+                        min={cycleReportStartDate}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="status-filter-section">
+                  <h4>Filtro por Status</h4>
+                  <p>Selecione os status das tarefas que deseja incluir no relatório:</p>
+
+                  <div className="status-filter-grid">
+                    {getUniqueStatusesFromProject().map(status => (
+                      <div
+                        key={status.id}
+                        className={`status-filter-item ${cycleReportStatusFilters.includes(status.id) ? 'selected' : ''
+                          }`}
+                        onClick={() => handleCycleReportStatusChange(status.id)}
+                      >
+                        <input
+                          type="checkbox"
+                          id={`cycle-status-${status.id}`}
+                          checked={cycleReportStatusFilters.includes(status.id)}
+                          onChange={() => handleCycleReportStatusChange(status.id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span>{status.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {cycleReportStartDate && cycleReportEndDate && (
+                  <div className="date-filter-info">
+                    <p><strong>ℹ️ Filtro por data ativo:</strong> Serão exportadas apenas as tarefas que foram concluídas ou marcadas como "Pronto para Publicação" entre {cycleReportStartDate.split('-').reverse().join('/')} e {cycleReportEndDate.split('-').reverse().join('/')}.</p>
+                  </div>
+                )}
+
+                <div className="modal-info">
+                  <p>
+                    <strong>📊 Tarefas a serem exportadas:</strong>
+                    {cycleReportStartDate && cycleReportEndDate
+                      ? `Será calculado baseado no histórico das ${cycleReportStatusFilters.length > 0 
+                          ? `${allProjectTasks.filter(task => cycleReportStatusFilters.includes(task.state_id)).length} tarefas filtradas por status`
+                          : `${allProjectTasks.length} tarefas`}`
+                      : `${cycleReportStatusFilters.length > 0
+                        ? allProjectTasks.filter(task => cycleReportStatusFilters.includes(task.state_id)).length
+                        : allProjectTasks.length
+                      } de ${allProjectTasks.length} tarefas`
+                    }
+                  </p>
+                </div>
+
+                <div className="modal-actions">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => {
+                      setShowCycleReportModal(false);
+                      setCycleReportStartDate('');
+                      setCycleReportEndDate('');
+                      setCycleReportStatusFilters([]);
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={openPdfEditor}
+                    disabled={!cycleReportStartDate && !cycleReportEndDate && cycleReportStatusFilters.length === 0 && allProjectTasks.length === 0}
+                  >
+                    ✏️ Editar PDF
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={generateCyclePDF}
+                    disabled={!cycleReportStartDate && !cycleReportEndDate && cycleReportStatusFilters.length === 0 && allProjectTasks.length === 0}
                   >
                     📄 Gerar PDF
                   </button>
